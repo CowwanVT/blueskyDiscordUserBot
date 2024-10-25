@@ -1,4 +1,4 @@
-A thing to post things from a bluesky feed into discord
+A thing to post things from a bluesky user feed into discord
 
 writing a python script was easier than figuring out docker
 

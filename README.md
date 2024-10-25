@@ -8,27 +8,51 @@ rough install instructions
 
 -Download bot.py
 -Place it wherever you like in your file system
+
 -Open bot.py in Notepad or some other text editor
+
 -Add the user you're going to scrape from between the quotes after "profile =" for example 'cowwan.bsky.social'
+
 -Add the discord channel id you want to post to after discordChannelID (right click the channel -> copy channel id)
+
 -Go to https://discord.com/developers/applications
+
 -Click New Application 
+
 -Give it a cute name, accept the terms, and click create
+
 -Go to the Bot tab on the left
+
 -Click Reset Token to get a new token
+
 -Copy it into bot.py after discordBotToken=
+
 -Go to the Oauth2 tab on the left and scroll down to OAuth2 URL Generator
+
 -Select the "bot" scope
+
 -under "Bot Permissions" select "Send Messages"
+
 -Copy the generated URL, go to it, and add the bot to your server
+
 -Go to Python.org > Downloads
+
 -Get the installer for your OS
+
 -Run the installer
+
 -On the first screen select "Add python.exe to PATH"
+
 -Click Install Now
+
 -Let installer run
+
 -open CMD
+
 -Navigate to folder with bot.py
+
 -run the command 'pip install requests audioop-lts discord'
--run python boy.py
+
+-run python bot.py
+
 

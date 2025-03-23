@@ -1,51 +1,93 @@
 import requests
 import json
-from datetime import datetime, timezone
+import time
 import discord
 from discord.ext import tasks
+import threading
+import queue
 
 profile = '' #profile to scrape from
-requestURL = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed'
-limit = 10 #how many posts back to check
-postFilter = 'posts_no_replies' #which posts to grab, can be posts_with_replies, posts_no_replies, posts_with_media, posts_and_author_threads
-includePins = 'False' #whether or not to grab pinned posts
 
-discordChannelID = #channel ID to post in
-discordBotToken = #bot token from discord developer
+discordChannelID = #the discord channel ID to post to
+discordBotToken = ''#your discord bot token
 
-interval = 15 #how many minutes to wait between checks
+limit = 50 #how many records to get at a time
+interval = 1 #how many minutes to wait between checks
+
+class Post():
+    def __init__(self, post):
+        self.postURI = post['post']['uri']
+        self.postAuthor = post['post']['author']['handle']
+        self.postID = str(self.postURI.split('/')[4]).lower()
+        self.postURL = 'https://bsyy.app/profile/'+ self.postAuthor + '/post/' + self.postID
+        self.isValid = self.postAuthor != 'handle.invalid'
+        self.postCID = post['post']['cid']
+
+class Bluesky():
+    def __init__(self):
+        self.postIDs = []
+        self.postHistoryLimit = 100
+        self.endpointURL = 'https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed'
+        self.profile = profile
+        self.requestURL = self.endpointURL + '?actor=' +  self.profile + '&limit=' + str(limit) + '&filter=posts_no_replies&includePins=False'
+        self.populateHistory()
+
+    def getPosts(self):
+        newPosts = []
+        response = requests.get(self.requestURL).json()
+        postList = response['feed']
+        for postData in postList:
+            post = Post(postData)
+            if post.isValid:
+                if post.postCID not in self.postIDs:
+                    self.postIDs.append(post.postCID)
+                    newPosts.append(post)
+
+        while len(self.postIDs) > self.postHistoryLimit:
+            self.postIDs.pop(0)
+        return newPosts
+
+    def populateHistory(self):
+        response = requests.get(self.requestURL).json()
+        postList = response['feed']
+
+        for postData in postList:
+            post = Post(postData)
+            self.postIDs.append(post.postCID)
+
+def logToConsole(message):
+    print(str(time.asctime()) + ' ' + message)
 
 
-global lastUpdateTime
-lastUpdateTime = datetime.now(timezone.utc).timestamp()
+def blueskyChecker(postQueue):
+    posts = []
+    Bsky = Bluesky()
+    while True:
+        time.sleep(interval*60)
+        logToConsole('Retrieving messages')
+        posts = Bsky.getPosts()
+        for post in posts:
+            postQueue.put(post.postURL)
+        logToConsole(str(postQueue.qsize()) + ' posts queued')
 
-def getBlueskyPosts():
-    constructedURL = requestURL + '?actor=' + profile + '&limit=' + str(limit) + '&filter='+ postFilter + '&includePins=' + includePins
-    response = requests.get(constructedURL).json()
-    return response
+postQueue = queue.Queue()
+blueskyThread = threading.Thread(target=blueskyChecker, args=(postQueue,))
+blueskyThread.daemon = True
+blueskyThread.start()
 
-intents = discord.Intents.default()
-client = discord.Client(intents=intents)
+client = discord.Client(intents=discord.Intents.default())
 
 @tasks.loop(minutes = interval)
 async def checkPosts():
-    global lastUpdateTime
-
-    await client.wait_until_ready()
     channel = client.get_channel(discordChannelID)
-    response = getBlueskyPosts()
-    for post in response['feed']:
-
-        postTime = datetime.strptime(post['post']['record']['createdAt'],  '%Y-%m-%dT%H:%M:%S.%f%z').timestamp()
-
-        if postTime > (lastUpdateTime):
-            postURL = 'https://bsky.app/profile/'+ post['post']['author']['handle'] + '/post/' + post['post']['uri'].split('/')[4]
-            await channel.send(postURL)
-    lastUpdateTime = datetime.now().timestamp()- 20
+    logToConsole('Posting ' + str(postQueue.qsize()) + ' messages')
+    while postQueue.qsize() > 0:
+        await client.wait_until_ready()
+        await channel.send(postQueue.get())
 
 @client.event
 async def on_ready():
-    print('We have logged in as {0.user}'.format(client))
+    logToConsole('Logged in as {0.user}'.format(client))
     checkPosts.start()
 
 client.run(discordBotToken)
